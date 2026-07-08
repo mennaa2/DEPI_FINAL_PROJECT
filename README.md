@@ -2,6 +2,10 @@
 
 An AI-powered maternal healthcare platform developed with **Python**, **Streamlit**, and **Machine Learning** to support pregnant women through intelligent risk prediction, pregnancy tracking, AI-assisted guidance, and automated medical report analysis.
 
+## 🚀 Live Demo
+
+🔗 https://depifinalproject-r4.streamlit.app/
+
 ---
 
 # 📖 Overview
