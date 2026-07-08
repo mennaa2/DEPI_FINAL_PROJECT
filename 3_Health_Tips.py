@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import date, timedelta
 from auth.auth_manager import require_login
 from utils.components import (
     set_page,
@@ -6,165 +7,156 @@ from utils.components import (
     render_user_bar,
     render_footer,
     section_header,
+    progress_ring,
 )
 
-set_page("Health Tips", "❤️")
+set_page("Pregnancy Tracker", "🤰")
 user = require_login()
-render_navbar(active="Health Tips")
+render_navbar(active="Tracker")
 render_user_bar(user)
 
 section_header(
-    "Stay informed",
-    "Health Tips & Risk Awareness",
-    "Educational pregnancy health information based on common risk factors.",
+    "Week by week",
+    "Pregnancy Tracker",
+    "Track your pregnancy progress and estimated due date.",
 )
 
-# Content unchanged from the original app
-conditions = {
-    "High Blood Pressure": {
-        "icon": "🩸",
-        "risk": "High blood pressure during pregnancy may increase the risk of preeclampsia, preterm birth, and complications.",
-        "tips": [
-            "Monitor blood pressure regularly.",
-            "Reduce salt intake.",
-            "Drink enough water.",
-            "Attend all prenatal visits.",
-            "Take medications only if prescribed."
-        ],
-        "warning": [
-            "Severe headache",
-            "Blurred vision",
-            "Swelling of face or hands",
-            "Chest pain"
-        ]
-    },
+# -------------------------
+# Last Menstrual Period  (logic unchanged — now remembered across pages
+# via session_state so the Dashboard can show the current week too)
+# -------------------------
+with st.container(key="glass_step"):
+    lmp = st.date_input(
+        "Select the First Day of Your Last Menstrual Period (LMP)",
+        value=st.session_state.get("lmp_date", date.today()),
+    )
+st.session_state.lmp_date = lmp
 
-    "Gestational Diabetes": {
-        "icon": "🍬",
-        "risk": "Gestational diabetes can affect both mother and baby if not monitored.",
-        "tips": [
-            "Maintain a balanced diet.",
-            "Exercise regularly.",
-            "Monitor blood sugar.",
-            "Avoid sugary drinks.",
-            "Follow doctor's advice."
-        ],
-        "warning": [
-            "Excessive thirst",
-            "Frequent urination",
-            "Blurred vision"
-        ]
-    },
+today = date.today()
 
-    "Anemia": {
-        "icon": "🩹",
-        "risk": "Low hemoglobin may reduce oxygen supply to mother and baby.",
-        "tips": [
-            "Eat iron-rich foods.",
-            "Take iron supplements if prescribed.",
-            "Include Vitamin C in meals.",
-            "Attend follow-up blood tests."
-        ],
-        "warning": [
-            "Extreme fatigue",
-            "Shortness of breath",
-            "Dizziness"
-        ]
-    },
+days = (today - lmp).days
 
-    "Smoking": {
-        "icon": "🚭",
-        "risk": "Smoking increases miscarriage, low birth weight, and premature birth risk.",
-        "tips": [
-            "Stop smoking.",
-            "Avoid passive smoking.",
-            "Seek professional support.",
-            "Maintain healthy nutrition."
-        ],
-        "warning": [
-            "Reduced fetal movement",
-            "Persistent bleeding",
-            "Difficulty breathing"
-        ]
-    },
+week = days // 7
 
-    "Obesity": {
-        "icon": "⚖️",
-        "risk": "Obesity may increase pregnancy complications including diabetes and hypertension.",
-        "tips": [
-            "Maintain healthy weight gain.",
-            "Walk regularly.",
-            "Eat balanced meals.",
-            "Stay hydrated."
-        ],
-        "warning": [
-            "High blood pressure",
-            "Swelling",
-            "Severe pain"
-        ]
-    },
+if week < 1:
+    week = 1
 
-    "Poor Nutrition": {
-        "icon": "🥗",
-        "risk": "Poor nutrition affects fetal growth and maternal health.",
-        "tips": [
-            "Eat fruits and vegetables.",
-            "Consume enough protein.",
-            "Take prenatal vitamins.",
-            "Drink enough water."
-        ],
-        "warning": [
-            "Rapid weight loss",
-            "Persistent weakness",
-            "Poor fetal growth"
-        ]
-    }
+if week > 40:
+    week = 40
+
+due_date = lmp + timedelta(days=280)
+st.session_state.current_pregnancy_week = week
+
+# -------------------------
+# Summary cards
+# -------------------------
+ring_col, m1, m2 = st.columns([1.1, 1, 1])
+
+with ring_col:
+    with st.container(key="glass_ring"):
+        progress_ring(
+            percent=(week / 40) * 100,
+            big_text=f"Week {week}",
+            small_text=f"{week}/40 weeks",
+        )
+
+with m1:
+    st.metric("Current Pregnancy Week", f"Week {week}")
+    st.metric("Trimester", "1st" if week <= 13 else ("2nd" if week <= 27 else "3rd"))
+
+with m2:
+    st.metric("Expected Due Date", due_date.strftime("%d %B %Y"))
+    st.metric("Days Remaining", max(0, (due_date - today).days))
+
+st.progress(week / 40)
+st.caption(f"Pregnancy Progress : {week}/40 Weeks")
+
+st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
+
+# -------------------------
+# Weekly Information  (data unchanged)
+# -------------------------
+weekly_data = {
+
+1:{
+"baby":"The fertilized egg begins implantation.",
+"mother":"You may not notice symptoms yet.",
+"tips":"Take folic acid and avoid smoking."
+},
+
+5:{
+"baby":"Baby's heart starts beating.",
+"mother":"Morning sickness may begin.",
+"tips":"Stay hydrated and eat small meals."
+},
+
+10:{
+"baby":"Major organs are forming.",
+"mother":"Fatigue and nausea are common.",
+"tips":"Continue prenatal vitamins."
+},
+
+20:{
+"baby":"Baby can hear sounds.",
+"mother":"You may feel fetal movements.",
+"tips":"Attend routine ultrasound appointments."
+},
+
+30:{
+"baby":"Baby gains weight rapidly.",
+"mother":"Back pain is common.",
+"tips":"Sleep on your left side."
+},
+
+40:{
+"baby":"Baby is ready for birth.",
+"mother":"Labor may begin anytime.",
+"tips":"Prepare for delivery."
 }
 
-if "selected_condition" not in st.session_state:
-    st.session_state.selected_condition = list(conditions.keys())[0]
+}
+
+nearest = min(
+weekly_data.keys(),
+key=lambda x:abs(x-week)
+)
+
+info = weekly_data[nearest]
+
+section_header("This week", f"Week {week} Spotlight")
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    with st.container(key="glass_baby"):
+        st.markdown("##### 👶 Baby Development")
+        st.write(info["baby"])
+with c2:
+    with st.container(key="glass_mother"):
+        st.markdown("##### 🤱 Mother's Symptoms")
+        st.write(info["mother"])
+with c3:
+    with st.container(key="glass_tips"):
+        st.markdown("##### ❤️ Weekly Tips")
+        st.write(info["tips"])
 
 # -------------------------
-# Condition cards (replaces the plain selectbox)
+# Milestone Timeline
 # -------------------------
-cols = st.columns(3)
-for i, (name, data) in enumerate(conditions.items()):
-    with cols[i % 3]:
-        active = st.session_state.selected_condition == name
-        if st.button(
-            f"{data['icon']}  {name}",
-            key=f"tip_btn_{name}",
-            use_container_width=True,
-        ):
-            st.session_state.selected_condition = name
-        if active:
-            st.markdown(
-                "<div style='text-align:center;margin-top:-8px;'>"
-                "<span style='color:var(--accent);font-size:0.75rem;font-weight:700;'>● selected</span></div>",
-                unsafe_allow_html=True,
-            )
+section_header("The Journey", "Pregnancy Milestones")
 
-choice = st.session_state.selected_condition
-data = conditions[choice]
+for m in sorted(weekly_data.keys()):
+    current = m == nearest
 
-st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        if current:
+            st.markdown(f"### 🩷 Week {m} (You are here)")
+        else:
+            st.markdown(f"### Week {m}")
 
-with st.container(key="glass_step"):
-    st.markdown(f"### {data['icon']} {choice}")
+        st.write(weekly_data[m]["baby"])
 
-    st.subheader("⚠️ Risk Awareness")
-    st.warning(data["risk"])
-
-    st.subheader("💡 Healthy Recommendations")
-    for tip in data["tips"]:
-        st.success("✔ " + tip)
-
-    st.subheader("🚨 Warning Signs")
-    for sign in data["warning"]:
-        st.error(sign)
-
-st.info(
-    "This information is educational only and does not replace professional medical advice."
+st.caption(
+"Educational information only. Consult your healthcare provider for medical advice."
 )
 
 render_footer()

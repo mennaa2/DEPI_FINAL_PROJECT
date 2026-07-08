@@ -1,5 +1,8 @@
 import streamlit as st
+
 from auth.auth_manager import require_login
+from database import db_manager
+from ai_assistant.assistant import get_answer
 from utils.components import (
     set_page,
     render_navbar,
@@ -8,129 +11,105 @@ from utils.components import (
     section_header,
 )
 
-set_page("About", "ℹ️")
+set_page("AI Assistant", "💬")
 user = require_login()
-render_navbar(active="About")
+render_navbar(active="AI Assistant")
 render_user_bar(user)
 
-# -----------------------------
-# Hero
-# -----------------------------
-st.markdown(
-    """
-    <div class="hero-wrap" style="padding-top:30px;padding-bottom:10px;">
-        <div class="hero-eyebrow">ℹ️ About the project</div>
-        <div class="hero-title" style="font-size:clamp(2rem,4.5vw,3rem);">
-            Built to make maternal care<br><span class="grad">a little clearer</span>
-        </div>
-        <div class="hero-subtitle">
-            Maternal Care Platform is an AI-powered pregnancy monitoring system
-            developed as a Graduation Project — combining machine learning,
-            education, and everyday tracking in one place.
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
+section_header(
+    "Ask anything",
+    "AI Pregnancy Assistant",
+    "Ask a pregnancy-related question — from morning sickness to warning "
+    "signs. This assistant provides educational information only and every "
+    "conversation is saved to your account.",
 )
 
-# -----------------------------
-# Mission / Objectives
-# -----------------------------
-section_header("Our mission", "Project Objectives")
 
-objectives = [
-    "Predict maternal pregnancy risk using Machine Learning.",
-    "Track pregnancy week and estimated due date.",
-    "Provide educational health recommendations.",
-    "Increase awareness of pregnancy risk factors.",
-    "Offer a simple AI assistant for common pregnancy questions.",
-]
-cols = st.columns(len(objectives))
-for i, obj in enumerate(objectives):
-    with cols[i]:
-        with st.container(key=f"glass_obj{i}"):
-            st.markdown(
-                f"<div style='font-size:1.4rem;'>✔️</div>"
-                f"<div style='font-size:0.85rem;color:var(--ink);margin-top:6px;'>{obj}</div>",
-                unsafe_allow_html=True,
-            )
+def _append_and_save(role: str, content: str):
+    st.session_state.chat_history.append({"role": role, "content": content})
+    db_manager.save_chat_message(user["id"], role, content)
+
 
 # -----------------------------
-# Technologies
+# Chat history — loaded from SQLite so it survives across sessions,
+# instead of resetting every time the page reruns.
 # -----------------------------
-section_header("Under the hood", "Technologies Used")
+if "chat_history" not in st.session_state:
+    stored = db_manager.get_chat_history(user["id"])
+    if stored:
+        st.session_state.chat_history = [
+            {"role": m["role"], "content": m["content"]} for m in stored
+        ]
+    else:
+        greeting = (
+            "Hi! 👋 I'm your pregnancy assistant. Ask me about symptoms, "
+            "nutrition, baby development, warning signs, or anything else on "
+            "your mind."
+        )
+        st.session_state.chat_history = [{"role": "assistant", "content": greeting}]
+        db_manager.save_chat_message(user["id"], "assistant", greeting)
 
-techs = ["Python", "Streamlit", "Scikit-learn", "Pandas", "NumPy", "Matplotlib", "Joblib"]
-badge_html = "".join(
-    f"<span style='display:inline-block;background:white;border:1.5px solid var(--border-soft);"
-    f"padding:8px 18px;border-radius:999px;margin:4px;font-weight:600;font-size:0.85rem;"
-    f"color:var(--ink);box-shadow:var(--shadow-soft);'>{t}</span>"
-    for t in techs
-)
-st.markdown(f"<div style='text-align:center;'>{badge_html}</div>", unsafe_allow_html=True)
+with st.container(key="glass_step"):
+    for msg in st.session_state.chat_history:
+        avatar = "🤰" if msg["role"] == "assistant" else "🙂"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"])
 
-st.markdown("<div style='height:30px;'></div>", unsafe_allow_html=True)
+    # Suggested questions
+    st.markdown("<div style='margin-top:8px;'></div>", unsafe_allow_html=True)
+    suggestions = [
+        "Is headache normal?",
+        "Can I exercise?",
+        "What should I eat?",
+        "When should I go to the doctor?",
+    ]
+    chip_cols = st.columns(len(suggestions))
+    for i, q in enumerate(suggestions):
+        with chip_cols[i]:
+            with st.container(key=f"ghostbtn7_{i}"):
+                if st.button(q, key=f"chip_{i}", use_container_width=True):
+                    _append_and_save("user", q)
+                    _append_and_save("assistant", get_answer(q))
+                    st.rerun()
 
-# -----------------------------
-# Platform Modules timeline
-# -----------------------------
-section_header("What's inside", "Platform Modules")
+question = st.chat_input("Ask your question…")
 
-modules = [
-    ("📊 Risk Prediction", "Predict pregnancy risk using a trained Random Forest model."),
-    ("🤰 Pregnancy Tracker", "Track pregnancy week and estimated due date."),
-    ("❤️ Health Tips", "Educational recommendations based on common pregnancy conditions."),
-    ("💬 AI Assistant", "Rule-based assistant answering common pregnancy questions."),
-]
-timeline_html = "<div class='timeline-track'>"
-for title, desc in modules:
-    timeline_html += f"<div class='timeline-item'><h5>{title}</h5><p>{desc}</p></div>"
-timeline_html += "</div>"
-st.markdown(timeline_html, unsafe_allow_html=True)
-
-# -----------------------------
-# Team
-# -----------------------------
-section_header("Who built it", "Project Team")
-
-team = [
-    ("Person 1", "Machine Learning & Risk Prediction"),
-    ("Person 2", "Pregnancy Tracker"),
-    ("Person 3", "Health Tips System"),
-    ("Person 4", "AI Assistant"),
-    ("Person 5", "Streamlit Dashboard & Integration"),
-]
-cols = st.columns(len(team))
-for i, (name, role) in enumerate(team):
-    with cols[i]:
-        with st.container(key=f"glass_team{i}"):
-            st.markdown(
-                f"<div style='width:48px;height:48px;border-radius:50%;"
-                f"background:var(--grad-primary);display:flex;align-items:center;"
-                f"justify-content:center;color:white;font-weight:800;margin:0 auto 10px auto;'>"
-                f"{name.split()[-1]}</div>"
-                f"<div style='text-align:center;font-weight:700;color:var(--ink);font-size:0.92rem;'>{name}</div>"
-                f"<div style='text-align:center;font-size:0.78rem;'>{role}</div>",
-                unsafe_allow_html=True,
-            )
-st.caption("(Replace these with your team members' names.)")
+if question:
+    if question.strip() == "":
+        st.warning("Please enter a question.")
+    else:
+        _append_and_save("user", question)
+        _append_and_save("assistant", get_answer(question))
+        st.rerun()
 
 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
-# -----------------------------
-# Disclaimer
-# -----------------------------
-with st.container(key="darkcard_disclaimer"):
-    st.markdown(
-        "#### ⚠ Disclaimer\n\n"
-        "This platform is intended for educational purposes only.\n\n"
-        "It is **NOT** a medical diagnosis tool and should not replace professional "
-        "medical advice. Always consult a qualified healthcare provider for medical "
-        "concerns."
-    )
+clear_l, clear_r = st.columns([5, 1])
+with clear_r:
+    with st.container(key="ghostbtn_clearchat"):
+        if st.button("Clear Chat", use_container_width=True):
+            db_manager.clear_chat_history(user["id"])
+            del st.session_state["chat_history"]
+            st.rerun()
 
-st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-st.success("Thank you for using Maternal Care Platform ❤️")
-st.caption("Graduation Project • 2026")
+with st.expander("📋 Example Questions"):
+    st.markdown("""
+- Is headache normal?
+- Can I exercise?
+- What should I eat?
+- Can I drink coffee?
+- Is nausea normal?
+- When should I go to the doctor?
+- Can I travel?
+- What vitamins should I take?
+- What is preeclampsia?
+- Is it normal to have swollen feet?
+- When will I feel the baby move?
+- What should I know about breastfeeding?
+""")
+
+st.caption(
+    "Educational purposes only. This assistant is not a substitute for professional medical advice."
+)
 
 render_footer()
